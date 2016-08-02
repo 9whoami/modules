@@ -33,7 +33,7 @@ class VirtualDisplay(metaclass=SingletonMetaclass):
             self.display = Display()
             assert self.display
         except Exception as e:
-            raise SystemError('Не удалось создать виртуальный дисплей {!r}'.format(e))
+            raise SystemError('Failed to create a virtual display with messahe: {}'.format(e))
 
     def start(self):
         if isinstance(self.display, Display):
@@ -59,7 +59,7 @@ class VirtualDisplay(metaclass=SingletonMetaclass):
             try:
                 fun(*args, **kwargs)
             except Exception as e:
-                print("При выполнении {!r} возникло исключение с сообщением {!r}".format(fun.__name__, e))
+                print("Implementation of the {} raises an exception with a message: {}".format(fun.__name__, e))
 
             display.stop()
 
