@@ -1,31 +1,38 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime
-from random import randint
-from logger import Logger
-from selenium.webdriver.common.keys import Keys
-from virtual_display import VirtualDisplay
-from config import Conf
-
 from random import choice
 from time import sleep
+
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
-from selenium.webdriver.common.proxy import *
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.proxy import *
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.remote.webelement import WebElement
+
+try:
+    from logger import Logger
+except ImportError:
+    from .Defaults import DefaultLogger as Logger
+
+try:
+    from config import Conf
+except ImportError:
+    from .Defaults import DefaultConf as Conf
 
 __author__ = 'whoami'
-__version__ = '2.3.0'
+__version__ = '2.4.1'
 __date__ = '27.03.16 0:46'
 __description__ = """
 Обертка для selenium.webdriver
 """
+
 
 config = Conf()
 config.read_section('webdriver')
@@ -59,21 +66,20 @@ class WebDriver(metaclass=SwithSuperMetaclass):
     """
 
     _profile = None
+    scroll_method = 0
 
     def __init__(self, **kwargs):
+
         self.logger = Logger()
         self.driver_profile = kwargs
 
         super().__init__(**self.driver_profile)
 
         self.set_window_size(self.heigth, self.width)
-        config.load_timeout = int(config.load_timeout)
-        self.set_page_load_timeout(config.load_timeout)
-        config.implicitly_wait = int(config.implicitly_wait)
-        self.implicitly_wait(config.implicitly_wait)
-        self.get(config.test_url)
+        self.set_page_load_timeout(int(config.load_timeout))
+        self.implicitly_wait(int(config.implicitly_wait))
 
-        self.scroll_method = randint(0,2)
+        self.get(config.test_url)
 
     def __del__(self):
         try:
@@ -87,7 +93,7 @@ class WebDriver(metaclass=SwithSuperMetaclass):
             pass
 
     @staticmethod
-    def proxy_validation(proxy: str, ptype: str, web_site: str='https://whoer.net/') -> bool:
+    def proxy_validation(proxy: str, ptype: str, web_site: str = 'https://whoer.net/') -> bool:
         """
         Проверка живучести прокси.
         :param proxy: IP:PORT прокси
@@ -102,7 +108,7 @@ class WebDriver(metaclass=SwithSuperMetaclass):
             from grab import Grab
             from grab import GrabError
         except ImportError:
-            print('Для валидации прокси необходим Grab!')
+            print('For validation proxy needed Grab!')
             return True
 
         g = Grab()
@@ -112,13 +118,13 @@ class WebDriver(metaclass=SwithSuperMetaclass):
                 timeout=60)
 
         try:
-            print('Начинаем проверку прокси url={!r}'.format(web_site))
+            print('Starting check proxy url={!r}'.format(web_site))
             g.go(web_site)
         except GrabError:
-            print('Прокси {!r} мертв'.format(proxy))
+            print('Proxy {!r} is dead'.format(proxy))
             return False
         else:
-            print('Прокси {!r} жив'.format(proxy))
+            print('Proxy {!r} is live'.format(proxy))
             return True
 
     @property
@@ -145,18 +151,16 @@ class WebDriver(metaclass=SwithSuperMetaclass):
 
             if SwithSuperMetaclass.web_driver_select():
                 dcap = dict(DesiredCapabilities.PHANTOMJS).copy()
-                service_args = config.service_args if \
-                    isinstance(config.service_args, list) else list()
 
                 if proxy:
-                    service_args.append('--proxy={}'.format(proxy))
+                    self._service_args.append('--proxy={}'.format(proxy))
                 if proxy_type and proxy:
-                    service_args.append('--proxy-type={}'.format(proxy_type))
+                    self._service_args.append('--proxy-type={}'.format(proxy_type))
                 if user_agent:
                     dcap["phantomjs.page.settings.userAgent"] = user_agent
 
                 self._profile = dict(desired_capabilities=dcap,
-                                     service_args=service_args)
+                                     service_args=self._service_args)
             else:
                 ff_profile = webdriver.FirefoxProfile()
                 if user_agent:
@@ -169,8 +173,7 @@ class WebDriver(metaclass=SwithSuperMetaclass):
                     "media.peerconnection.enabled", False)
 
                 if proxy:
-                    proxy_ = Proxy(dict(proxyType=ProxyType.MANUAL,
-                                       socksProxy=proxy))
+                    proxy_ = Proxy(dict(proxyType=ProxyType.MANUAL, socksProxy=proxy))
                 else:
                     proxy_ = None
 
@@ -229,7 +232,7 @@ class WebDriver(metaclass=SwithSuperMetaclass):
             self.save_screenshot(config.screen_dir + file_name)
 
             self.logger.info(
-                "Создан снимок окна браузера: {!r}".format(file_name))
+                "Screenshot is available: {!r}".format(file_name))
         except Exception as e:
             self.logger.debug(e)
             return None
@@ -244,21 +247,21 @@ class WebDriver(metaclass=SwithSuperMetaclass):
         """
         for i in range(0, 4):
             self.logger.info(
-                '{!r}-ая попытка перехода по url: {!r}'.format(i + 1, url))
+                '{!r} attempt to load the page. url: {!r}'.format(i + 1, url))
 
             try:
                 self._get(url)
             except Exception:
-                self.logger.warning('Не удалось загрузить страницу')
+                self.logger.warning('Page load error')
                 continue
             else:
-                self.logger.info('Страница загружена')
+                self.logger.info('Page loaded')
                 return True
 
     def _get(self, url):
         is_not_load = lambda page_source: load_error in page_source or \
                                           blank_source in page_source
-        load_error = '<!ENTITY loadError.label "Проблема при загрузке страницы">'
+        load_error = '<!ENTITY loadError.label'
         blank_source = '<html><head></head><body></body></html>'
 
         super().get(url)
@@ -267,7 +270,7 @@ class WebDriver(metaclass=SwithSuperMetaclass):
         self.take_screenshot()
 
         if is_not_load(result):
-            raise Exception('Некоректный HTML')
+            raise Exception('Incorrectly HTML')
 
         return result
 
@@ -376,7 +379,6 @@ class WebDriver(metaclass=SwithSuperMetaclass):
             self.get(url)
 
     def switch_next_tab(self):
-        # self.find_element_by_css_selector("body").send_keys(Keys.CONTROL + Keys.TAB)
         self.switch_to_window(self.window_handles[1])
         self.switch_to_active_element()
 
@@ -385,7 +387,6 @@ class WebDriver(metaclass=SwithSuperMetaclass):
         self.switch_to_active_element()
 
     def close_current_tab(self):
-        # self.find_element_by_css_selector("body").send_keys(Keys.CONTROL + "w")
         self.close()
         self.swith_previous_tab()
 
@@ -412,7 +413,18 @@ class WebDriver(metaclass=SwithSuperMetaclass):
             return
 
     def scroll_up(self, y):
-        try:
+        def js():
             self.execute_script("document.documentElement.scrollTop -= {};".format(y))
+
+        def arrow():
+            self.find_element_by_css_selector("body").send_keys(Keys.ARROW_UP)
+
+        def page_down():
+            self.find_element_by_css_selector("body").send_keys(Keys.PAGE_UP)
+
+        scroll_method = {0: js, 1: arrow, 2: page_down}
+
+        try:
+            scroll_method[self.scroll_method]()
         except Exception:
             return
